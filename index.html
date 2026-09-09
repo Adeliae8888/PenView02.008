@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0f172a" />
+    <meta
+      name="description"
+      content="航空戦術状況認識のためのPWA。基本・静的・動的レイヤーで敵味方と地図情報を整理します。"
+    />
+    <title>TacView02</title>
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="icons/icon-192.png" />
+    <link rel="stylesheet" href="styles.css?v=114-20260910-1" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <div class="floating-windows-container">
+        <!-- レイヤーウィンドウ -->
+        <div class="draggable-window" data-window="layers" data-feature="layers">
+          <div class="window-header">
+            <span class="window-title">Layers</span>
+            <div class="window-controls">
+              <label class="drag-toggle-label">
+                <input type="checkbox" class="drag-toggle" checked />
+                <span class="drag-icon">⋮⋮</span>
+              </label>
+              <button class="window-close-btn" data-window="layers">×</button>
+            </div>
+          </div>
+          <div class="window-content">
+            <div class="layer-controls">
+              <label class="compact-toggle"><input id="toggle-basic" type="checkbox" checked /><span>Base</span></label>
+              <label class="compact-toggle"><input id="toggle-static" type="checkbox" checked /><span>Static</span></label>
+              <label class="compact-toggle"><input id="toggle-dynamic" type="checkbox" checked /><span>Dynamic</span></label>
+            </div>
+          </div>
+        </div>
+
+        <!-- 自機B/Eウィンドウ -->
+        <div class="draggable-window" data-window="selfinfo" data-feature="be">
+          <div class="window-header">
+            <span class="window-title">B/E</span>
+            <div class="window-controls">
+              <label class="drag-toggle-label">
+                <input type="checkbox" class="drag-toggle" checked />
+                <span class="drag-icon">⋮⋮</span>
+              </label>
+              <button class="window-close-btn" data-window="selfinfo">×</button>
+            </div>
+          </div>
+          <div class="window-content">
+            <div class="self-info-grid">
+              <div class="info-row">
+                <span class="info-label">B/E</span>
+                <strong id="selfBearing">---°</strong>
+                <span class="info-unit">/</span>
+                <strong id="selfDistance">--nm</strong>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 自機Hookウィンドウ -->
+        <div class="draggable-window" data-window="hook" data-feature="hook">
+          <div class="window-header">
+            <span class="window-title">S/H</span>
+            <div class="window-controls">
+              <label class="drag-toggle-label">
+                <input type="checkbox" class="drag-toggle" checked />
+                <span class="drag-icon">⋮⋮</span>
+              </label>
+              <button class="window-close-btn" data-window="hook">×</button>
+            </div>
+          </div>
+          <div class="window-content" data-feature-content="hook">
+            <button id="hookButton" class="compact-btn" type="button" aria-label="フック設定">フック</button>
+            <div id="hookInfo">
+              <div><span class="info-label">自機Hook</span> <strong id="hookName">--</strong></div>
+              <div><strong id="hookBearing">---°</strong> / <strong id="hookDistance">--nm</strong></div>
+            </div>
+          </div>
+        </div>
+
+        <div id="dynamicWarning" class="draggable-window dynamic-warning hidden" data-window="dynamic-warning" data-feature="warning" role="alert" aria-live="assertive">
+          <div class="window-header">
+            <span class="window-title">RANGE WARNING</span>
+            <div class="window-controls">
+              <label class="drag-toggle-label">
+                <input type="checkbox" class="drag-toggle" checked />
+                <span class="drag-icon">⋮⋮</span>
+              </label>
+            </div>
+          </div>
+          <div id="dynamicWarningItems" class="window-content dynamic-warning-items"></div>
+        </div>
+
+        <div id="timelineAlertWindow" class="draggable-window timeline-alert-window hidden" data-window="timeline-alert" data-feature="warning" role="alert" aria-live="assertive">
+          <div class="window-header">
+            <span class="window-title">ALERT WINDOW</span>
+            <div class="window-controls">
+              <label class="drag-toggle-label">
+                <input type="checkbox" class="drag-toggle" checked />
+                <span class="drag-icon">⋮⋮</span>
+              </label>
+            </div>
+          </div>
+          <div id="timelineAlertItems" class="window-content dynamic-warning-items"></div>
+        </div>
+      </div>
+      <div id="mapActionMenu" class="map-action-menu hidden">
+        <button type="button" data-map-action="mark">MARK</button>
+        <button type="button" data-map-action="do">DO</button>
+        <button type="button" data-map-action="so">SO</button>
+      </div>
+      <div id="coordinateActionMenu" class="map-action-menu hidden">
+        <button type="button" data-coordinate-action="be">B/E</button>
+        <button type="button" data-coordinate-action="latlon">LAT/LON</button>
+      </div>
+      <div id="coordinateInputPanel" class="coordinate-input-panel hidden">
+        <div class="window-title" data-coordinate-input-title></div>
+        <div class="coordinate-input-fields" data-coordinate-input-fields></div>
+        <div class="layer-form-actions"><button type="button" class="primary-btn small-btn" data-coordinate-submit>追加</button><button type="button" class="secondary-btn small-btn" data-coordinate-cancel>閉じる</button></div>
+      </div>
+
+      <div class="sidebar">
+        <div class="panel-header">
+          <div class="header-actions">
+            <button id="centerOnSelfButton" class="icon-btn" type="button" aria-label="自機位置を画面中央に表示" title="自機位置を画面中央に表示">⌖</button>
+            <button id="settingsButton" class="icon-btn" type="button" aria-label="設定を開く">⚙️</button>
+          </div>
+        </div>
+      </div>
+
+      <main class="map-panel">
+        <div class="map-toolbar">
+          <div class="toolbar-title">戦術マップ</div>
+          <div id="selectedInfo" class="toolbar-meta">未選択</div>
+        </div>
+        <svg id="mapSvg" viewBox="0 0 1000 700" role="img" aria-label="戦術地図"></svg>
+      </main>
+
+      <div id="scaleBar" class="scale-bar" aria-label="地図スケール">
+        <div id="scaleBarLabel" class="scale-bar-label">-- nm</div>
+        <div id="scaleBarTrack" class="scale-bar-track">
+          <div id="scaleBarFill" class="scale-bar-fill"></div>
+        </div>
+      </div>
+      <div id="cursorCoordinates" class="cursor-coordinates" aria-live="polite">
+        <span>位置</span>
+        <strong id="cursorLatitude">--</strong>
+        <strong id="cursorLongitude">--</strong>
+      </div>
+    </div>
+
+    <div id="numericKeypad" class="numeric-keypad hidden" role="dialog" aria-label="数値入力テンキー">
+      <div class="numeric-keypad-header">
+        <span>数値入力</span>
+        <button type="button" data-keypad-close aria-label="テンキーを閉じる">×</button>
+      </div>
+      <div class="dol-keypad-fields hidden" data-dol-keypad-fields>
+        <label>方位<input type="text" data-dol-keypad-target="bearing" data-bearing-input inputmode="none" readonly /></label>
+        <label>距離<input type="text" data-dol-keypad-target="distance" inputmode="none" readonly /></label>
+      </div>
+      <div class="latlon-keypad-fields hidden" data-latlon-keypad-fields>
+        <label><span data-latlon-hemisphere="lat">N</span><input type="text" data-latlon-keypad-target="lat" inputmode="none" readonly /></label>
+        <label><span data-latlon-hemisphere="lon">E</span><input type="text" data-latlon-keypad-target="lon" inputmode="none" readonly /></label>
+      </div>
+      <div class="numeric-keypad-display" data-keypad-display>--</div>
+      <div class="numeric-keypad-grid">
+        <button type="button" data-keypad-key="1">1</button>
+        <button type="button" data-keypad-key="2">2</button>
+        <button type="button" data-keypad-key="3">3</button>
+        <button type="button" data-keypad-action="backspace" aria-label="バックスペース">⌫</button>
+        <button type="button" data-keypad-key="4">4</button>
+        <button type="button" data-keypad-key="5">5</button>
+        <button type="button" data-keypad-key="6">6</button>
+        <button type="button" data-keypad-action="clear">AC</button>
+        <button type="button" data-keypad-key="7">7</button>
+        <button type="button" data-keypad-key="8">8</button>
+        <button type="button" data-keypad-key="9">9</button>
+        <button type="button" class="numeric-keypad-enter" data-keypad-action="done">ENTER</button>
+        <button type="button" data-keypad-key="-">−</button>
+        <button type="button" data-keypad-key="0">0</button>
+        <button type="button" data-keypad-key=".">.</button>
+      </div>
+    </div>
+
+    <div id="settingsModal" class="modal hidden" aria-hidden="true">
+      <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+        <div class="modal-header">
+          <h2 id="settingsTitle">設定</h2>
+          <button id="closeSettings" class="close-btn" type="button" aria-label="閉じる">✕</button>
+        </div>
+
+        <div class="setting-group display-scale-setting">
+          <label class="form-label" for="displayScale">シンボル・文字サイズ <output id="displayScaleValue">100%</output></label>
+          <input id="displayScale" type="range" min="10" max="200" step="1" value="100" />
+        </div>
+
+        <div class="setting-group">
+          <label class="form-label">B/E位置設定</label>
+          <div class="dual-input-row">
+            <input id="bullseyeLat" type="text" inputmode="decimal" placeholder="3541.234" />
+            <input id="bullseyeLon" type="text" inputmode="decimal" placeholder="13941.234" />
+          </div>
+          <button id="pickBullseyeOnMap" type="button" class="secondary-btn small-btn">MAPから指定</button>
+        </div>
+
+        <div class="setting-group">
+          <label class="form-label" for="coordinateSystem">座標系</label>
+          <select id="coordinateSystem">
+            <option value="DDMM.MMM">DDMM.MMM</option>
+            <option value="DDMMSS">DDMMSS</option>
+            <option value="MGRS">MGRS</option>
+            <option value="GARS">GARS</option>
+          </select>
+        </div>
+
+        <div class="setting-group">
+          <label class="form-label">初期のmapセンター位置</label>
+          <div class="dual-input-row">
+            <input id="mapCenterLat" type="text" inputmode="decimal" placeholder="3541.234" />
+            <input id="mapCenterLon" type="text" inputmode="decimal" placeholder="13941.234" />
+          </div>
+          <button id="pickMapCenterOnMap" type="button" class="secondary-btn small-btn">MAPから指定</button>
+        </div>
+
+        <div class="setting-group">
+          <label class="form-label">自機飛行模擬</label>
+          <div class="layer-form-grid">
+            <label>
+                <span>方位（磁方位）</span>
+              <input id="selfSimulationHeading" data-bearing-input type="number" min="0" max="359.9" step="0.1" value="0" />
+            </label>
+            <label>
+              <span>速度（kt）</span>
+              <input id="selfSimulationSpeed" type="number" min="0" max="2000" step="1" value="0" />
+            </label>
+          </div>
+          <div class="layer-form-actions">
+            <button id="pickSelfPositionOnMap" type="button" class="secondary-btn small-btn">開始位置をMAP指定</button>
+            <button id="toggleSelfSimulation" type="button" class="primary-btn small-btn">模擬開始</button>
+          </div>
+        </div>
+
+        <div class="setting-group">
+          <label class="form-label">GPS自機位置</label>
+          <div id="gpsStatus" class="gps-status" role="status">GPS停止中</div>
+          <div class="layer-form-actions">
+            <button id="toggleGpsTracking" type="button" class="primary-btn small-btn">GPS受信開始</button>
+          </div>
+        </div>
+
+        <div class="setting-group">
+          <label class="form-label">偏差</label>
+          <div class="radio-row">
+            <label><input type="radio" name="deviationMode" value="auto" checked /> 自動取得</label>
+            <label><input type="radio" name="deviationMode" value="manual" /> 手動入力</label>
+          </div>
+          <input id="manualDeviation" type="number" step="0.1" min="-100" max="100" placeholder="偏差（度） W=-8 / E=+8" disabled />
+        </div>
+
+        <div class="setting-group settings-buttons">
+          <button type="button" class="secondary-btn" data-layer-target="sead">SEAD管理</button>
+          <button type="button" class="secondary-btn" data-layer-target="tot">TOT設定</button>
+          <button type="button" class="secondary-btn" data-layer-target="mark">MARKオブジェクト設定</button>
+          <button type="button" class="secondary-btn" data-layer-target="basic">基本レイヤー設定</button>
+          <button type="button" class="secondary-btn" data-layer-target="static">静的レイヤー設定</button>
+          <button type="button" class="secondary-btn" data-layer-target="dynamic">動的レイヤー設定</button>
+          <button type="button" class="secondary-btn" data-window-settings>ウィンドウ設定</button>
+          <button type="button" class="secondary-btn" data-notification-settings>通知設定</button>
+          <button id="exportPresetButton" type="button" class="secondary-btn">現在状態をプリセット保存</button>
+          <button id="importPresetButton" type="button" class="secondary-btn">プリセット読み込み</button>
+          <input id="presetFileInput" type="file" accept=".json,application/json" hidden />
+          <button id="saveInitialStateButton" type="button" class="secondary-btn">現在の状態を初期値に設定</button>
+          <button id="resetAppButton" type="button" class="danger-btn">アプリを初期化</button>
+        </div>
+
+        <div id="basicLayerPanel" class="layer-panel hidden">
+          <div class="layer-panel-header">
+            <h3>基本レイヤー管理</h3>
+            <label class="mini-toggle">
+              <input id="basicLayerVisibleToggle" type="checkbox" checked />
+              <span>表示</span>
+            </label>
+          </div>
+
+          <div class="layer-toolbar">
+            <select id="basicLayerFilter">
+              <option value="all">全件</option>
+              <option value="controlled">CTR</option>
+              <option value="control-zone">ATZ</option>
+            </select>
+            <button id="addBasicAirspace" type="button" class="primary-btn small-btn">空域追加</button>
+            <button id="importBasicGeoJson" type="button" class="secondary-btn small-btn">GeoJSON読込</button>
+            <button id="clearBasicGeoJson" type="button" class="danger-btn small-btn">GeoJSON一括クリア</button>
+            <button id="limitBasicDisplayRange" type="button" class="secondary-btn small-btn">表示範囲限定</button>
+            <input id="basicGeoJsonFile" type="file" accept=".geojson,.json,application/geo+json,application/json" hidden />
+          </div>
+
+          <div id="basicLayerList" class="layer-list"></div>
+
+          <form id="basicLayerForm" class="layer-form hidden">
+            <input id="basicLayerId" type="hidden" />
+            <div class="layer-form-grid">
+              <label>
+                <span>名称</span>
+                <input id="basicLayerName" type="text" maxlength="40" placeholder="例: CTR East" />
+              </label>
+              <label>
+                <span>表示ラベル</span>
+                <input id="basicLayerLabel" type="text" maxlength="12" placeholder="CTR" />
+              </label>
+            </div>
+
+            <div class="layer-form-grid">
+              <label>
+                <span>表示名</span>
+                <input id="basicLayerDisplayName" type="text" maxlength="40" />
+              </label>
+              <label class="mini-toggle">
+                <input id="basicLayerDisplayNameVisible" type="checkbox" checked />
+                <span>表示名を表示</span>
+              </label>
+            </div>
+
+            <div class="layer-form-grid">
+              <label>
+                <span>種別</span>
+                <select id="basicLayerKind">
+                  <option value="controlled">CTR</option>
+                  <option value="control-zone">ATZ</option>
+                </select>
+              </label>
+              <label>
+                <span>表示</span>
+                <select id="basicLayerVisible">
+                  <option value="true">表示</option>
+                  <option value="false">非表示</option>
+                </select>
+              </label>
+            </div>
+
+            <label>
+              <span>ポリゴン座標（X,Y 形式; 区切り）</span>
+              <textarea id="basicLayerPoints" rows="5" placeholder="20,18; 38,24; 53,17; 68,32;"></textarea>
+            </label>
+
+            <div class="layer-form-actions">
+              <button type="submit" class="primary-btn small-btn">保存</button>
+              <button type="button" id="cancelBasicLayerForm" class="secondary-btn small-btn">閉じる</button>
+            </div>
+          </form>
+        </div>
+
+        <div id="staticLayerPanel" class="layer-panel hidden">
+          <div class="layer-panel-header">
+            <h3 id="managedLayerTitle">静的レイヤー管理</h3>
+            <label class="mini-toggle">
+              <input id="staticLayerVisibleToggle" type="checkbox" checked />
+              <span>表示</span>
+            </label>
+          </div>
+
+          <div class="layer-toolbar">
+            <select id="staticLayerFilter" aria-label="静的レイヤーフィルター">
+              <option value="all">全件</option>
+              <option value="waypoint">WAYPOINT</option>
+              <option value="ally">味方</option>
+              <option value="enemy">敵</option>
+              <option value="neutral">中立</option>
+            </select>
+            <button id="addStaticObject" type="button" class="primary-btn small-btn">オブジェクト追加</button>
+          </div>
+
+          <div id="staticLayerList" class="layer-list"></div>
+
+          <form id="staticLayerForm" class="layer-form hidden">
+            <input id="staticLayerId" type="hidden" />
+            <div class="layer-form-grid">
+              <label>
+                <span>名称</span>
+                <input id="staticLayerName" type="text" maxlength="40" placeholder="例: 交戦帯" />
+              </label>
+              <label>
+                <span>種別</span>
+                <select id="staticLayerType">
+                  <option value="waypoint">WAYPOINT</option>
+                  <option value="ally">味方</option>
+                  <option value="enemy">敵</option>
+                  <option value="neutral">中立</option>
+                  <option value="line">線</option>
+                </select>
+              </label>
+            </div>
+            <label>
+              <span>座標系</span>
+              <select id="staticLayerCoordSystem">
+                <option value="DDMM.MMM">DDMM.MMM</option>
+                <option value="DDMMSS">DDMMSS</option>
+                <option value="MGRS">MGRS</option>
+                <option value="GARS">GARS</option>
+                <option value="BE">B/E</option>
+              </select>
+            </label>
+            <label data-static-geo-field>
+              <span>緯度</span>
+              <input id="staticLayerLat" type="text" inputmode="decimal" placeholder="3541.234" />
+            </label>
+            <label data-static-geo-field>
+              <span>経度</span>
+              <input id="staticLayerLon" type="text" inputmode="decimal" placeholder="13941.234" />
+            </label>
+            <div class="layer-form-grid dynamic-list-item" data-static-be-fields>
+              <label>
+                <span>方位（磁方位）</span>
+                <input id="staticLayerBeBearing" data-bearing-input data-dynamic-bearing type="text" inputmode="none" />
+              </label>
+              <label>
+                <span>距離（nm）</span>
+                <input id="staticLayerBeDistance" data-dynamic-distance type="text" inputmode="none" />
+              </label>
+            </div>
+            <div class="static-line-fields hidden" data-static-line-fields>
+              <input id="staticLayerLinePoints" type="hidden" />
+              <div class="line-points-toolbar">
+                <span id="staticLayerLinePointSummary">地点: 0 / 50</span>
+                <button id="pickStaticLinePointsOnMap" type="button" class="secondary-btn small-btn">MAPから地点を追加</button>
+                <button id="undoStaticLinePoint" type="button" class="secondary-btn small-btn">直前を削除</button>
+                <button id="clearStaticLinePoints" type="button" class="danger-btn small-btn">全消去</button>
+              </div>
+              <p class="line-points-hint">MAPを連続クリックして地点を追加します。完了はEnterまたはMAPから地点を追加を再度選択。</p>
+              <label>
+                <span>線種</span>
+                <select id="staticLayerLineStyle">
+                  <option value="solid">実線</option>
+                  <option value="dashed">破線</option>
+                  <option value="dotted">点線</option>
+                </select>
+              </label>
+              <label>
+                <span>色</span>
+                <select id="staticLayerLineColor">
+                  <option value="#000000">黒</option>
+                  <option value="#60a5fa">青</option>
+                  <option value="#22c55e">緑</option>
+                  <option value="#f97316">橙</option>
+                  <option value="#ef4444">赤</option>
+                  <option value="#f8fafc">白</option>
+                  <option value="#fbbf24">黄</option>
+                </select>
+              </label>
+              <label>
+                <span>太さ</span>
+                <input id="staticLayerLineWidth" type="range" min="1" max="5" step="1" value="2" />
+                <output id="staticLayerLineWidthValue">2</output>
+              </label>
+            </div>
+            <button id="pickStaticPositionOnMap" type="button" class="secondary-btn small-btn">MAPから指定</button>
+            <div class="layer-form-grid">
+              <label>
+                <span>シンボル</span>
+                <select id="staticLayerSymbol">
+                  <option value="diamond">Diamond</option>
+                  <option value="square">Square</option>
+                  <option value="triangle">Triangle</option>
+                  <option value="circle">Circle</option>
+                  <option value="cross">Cross</option>
+                  <option value="ddg">船 / DDG</option>
+                  <option value="cv">船 / CV</option>
+                </select>
+              </label>
+            </div>
+            <div class="layer-form-grid hidden" data-legacy-geometry-fields>
+              <label>
+                <span>形状</span>
+                <select id="staticLayerGeometryType">
+                  <option value="none">なし</option>
+                  <option value="circle">円</option>
+                  <option value="sector">扇</option>
+                </select>
+              </label>
+              <label>
+                <span>半径</span>
+                <input id="staticLayerGeometryRadius" type="number" min="0" step="0.1" />
+              </label>
+            </div>
+            <div class="layer-form-grid hidden" data-legacy-geometry-fields>
+              <label>
+                <span>扇の開始方位（磁方位）</span>
+                <input id="staticLayerGeometryStartBearing" data-bearing-input type="number" min="0" max="359.9" step="0.1" value="0" />
+              </label>
+              <label>
+                <span>扇の終了方位（磁方位）</span>
+                <input id="staticLayerGeometryEndBearing" data-bearing-input type="number" min="0" max="359.9" step="0.1" value="90" />
+              </label>
+            </div>
+            <div class="dynamic-circle-settings hidden" data-dynamic-circle-settings>
+              <div class="layer-form-grid">
+                <label>
+                  <span>円 1 半径（nm）</span>
+                  <input id="dynamicCircleRadius1" type="number" min="0" step="0.1" value="10" />
+                </label>
+                <label>
+                  <span>円 1 色</span>
+                  <select id="dynamicCircleColor1">
+                    <option value="red">赤</option>
+                    <option value="yellow">黄</option>
+                    <option value="blue">青</option>
+                    <option value="green">緑</option>
+                  </select>
+                </label>
+              </div>
+              <div class="layer-form-grid">
+                <label>
+                  <span>円 2 半径（nm）</span>
+                  <input id="dynamicCircleRadius2" type="number" min="0" step="0.1" value="0" />
+                </label>
+                <label>
+                  <span>円 2 色</span>
+                  <select id="dynamicCircleColor2">
+                    <option value="red">赤</option>
+                    <option value="yellow">黄</option>
+                    <option value="blue">青</option>
+                    <option value="green">緑</option>
+                  </select>
+                </label>
+              </div>
+              <div class="layer-form-grid">
+                <label>
+                  <span>円 3 半径（nm）</span>
+                  <input id="dynamicCircleRadius3" type="number" min="0" step="0.1" value="0" />
+                </label>
+                <label>
+                  <span>円 3 色</span>
+                  <select id="dynamicCircleColor3">
+                    <option value="red">赤</option>
+                    <option value="yellow">黄</option>
+                    <option value="blue">青</option>
+                    <option value="green">緑</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+            <div class="layer-form-actions">
+              <button type="submit" class="primary-btn small-btn">保存</button>
+              <button type="button" id="cancelStaticLayerForm" class="secondary-btn small-btn">閉じる</button>
+            </div>
+          </form>
+        </div>
+
+        <div id="windowSettingsPanel" class="layer-panel hidden">
+          <div class="layer-panel-header">
+            <h3>ウィンドウ設定</h3>
+          </div>
+
+          <div id="windowSettingsList" class="layer-list"></div>
+
+          <div class="layer-toolbar window-add-toolbar">
+            <input id="windowNameInput" type="text" maxlength="24" placeholder="追加するウィンドウ名" />
+            <select id="windowFeatureSelect" aria-label="ウィンドウ機能">
+              <option value="layers">Layers：レイヤー表示</option>
+              <option value="hook">自機Hook：現行Hook</option>
+              <option value="hook2">Hook：2点Hook</option>
+              <option value="be">B/E：自機B/E</option>
+              <option value="track">Track：磁方位</option>
+              <option value="gs">GS：GPS速度</option>
+              <option value="tos">TOS：目標到達時刻</option>
+              <option value="tot">TOT：指定時刻への必要速度</option>
+              <option value="dynamicList">DOL：簡易設定</option>
+              <option value="sead">SEAD：HARM管理</option>
+            </select>
+            <button id="addWindowButton" type="button" class="primary-btn small-btn">追加</button>
+          </div>
+        </div>
+
+        <div id="notificationSettingsPanel" class="layer-panel hidden">
+          <div class="layer-panel-header">
+            <h3>通知設定</h3>
+          </div>
+          <div class="notification-options">
+            <span class="form-label">通知項目設定</span>
+            <label class="mini-toggle"><input type="checkbox" data-notification-item="sead" /> <span>SEAD</span></label>
+            <label class="mini-toggle"><input type="checkbox" data-notification-item="mez" /> <span>MEZ</span></label>
+            <label class="mini-toggle"><input type="checkbox" data-notification-item="tot" /> <span>TOT</span></label>
+          </div>
+          <label>
+            <span>テキスト設定</span>
+            <input id="notificationText" type="text" maxlength="80" />
+          </label>
+          <div class="layer-form-actions">
+            <button id="notificationPermissionButton" type="button" class="primary-btn small-btn">通知を許可</button>
+          </div>
+        </div>
+
+        <div id="seadSettingsPanel" class="layer-panel hidden sead-settings">
+          <div class="layer-panel-header">
+            <h3>SEAD管理</h3>
+          </div>
+          <div class="layer-form-grid">
+            <label>
+              <span>HARM TOF（MM:SS）</span>
+              <input id="seadHarmTof" type="text" inputmode="numeric" placeholder="03:00" />
+            </label>
+            <label>
+              <span>HARM REMAIN（0～99）</span>
+              <input id="seadHarmRemain" type="number" min="0" max="99" step="1" />
+            </label>
+          </div>
+          <label>
+            <span>ARIZONA（警告残弾数 0～9）</span>
+            <input id="seadArizona" type="number" min="0" max="9" step="1" />
+          </label>
+          <div class="layer-form-actions">
+            <button id="seadResetButton" type="button" class="danger-btn small-btn">SEADリセット</button>
+          </div>
+        </div>
+
+        <div id="totSettingsPanel" class="layer-panel hidden tot-settings">
+          <div class="layer-panel-header">
+            <h3>TOT設定</h3>
+          </div>
+          <div class="layer-form-grid">
+            <div class="tot-setting-time">
+              <span>TOT 時刻入力</span>
+              <div class="tot-time-inputs" aria-label="TOT時刻入力">
+                <label>DD<input id="totTimeHour" type="number" min="0" max="23" step="1" /></label>
+                <span>:</span>
+                <label>MM<input id="totTimeMinute" type="number" min="0" max="59" step="1" /></label>
+                <span>:</span>
+                <label>SS<input id="totTimeSecond" type="number" min="0" max="59" step="1" /></label>
+              </div>
+            </div>
+            <div class="tot-setting-time">
+              <span>TOF設定</span>
+              <div class="tot-time-inputs" aria-label="TOF設定">
+                <label>MM<input id="totTofMinute" type="number" min="0" max="999" step="1" /></label>
+                <span>:</span>
+                <label>SS<input id="totTofSecond" type="number" min="0" max="59" step="1" /></label>
+              </div>
+            </div>
+          </div>
+          <label class="mini-toggle tot-launch-toggle">
+            <input id="totLaunchEnabled" type="checkbox" />
+            <span>発射TOTを有効にする</span>
+          </label>
+          <div class="timeline-settings">
+            <div class="layer-panel-header"><h4>TIME LINE</h4></div>
+            <div id="timelineSettingsList" class="timeline-settings-list"></div>
+            <button id="addTimelineEventButton" type="button" class="secondary-btn small-btn">EVENTを追加</button>
+          </div>
+        </div>
+
+        <div id="markSettingsPanel" class="layer-panel hidden">
+          <div class="layer-panel-header"><h3>MARKオブジェクト設定</h3></div>
+          <div class="layer-form-grid">
+            <label><span>名称</span><input id="markObjectName" type="text" maxlength="40" /></label>
+            <label><span>種別</span><select id="markObjectType"><option value="enemy">敵</option><option value="neutral">中立</option><option value="ally">味方</option><option value="waypoint">WAYPOINT</option></select></label>
+          </div>
+          <label><span>シンボル</span><select id="markObjectSymbol"><option value="diamond">Diamond</option><option value="square">Square</option><option value="triangle">Triangle</option><option value="circle">Circle</option><option value="cross">Cross</option><option value="missile">Missile</option></select></label>
+          <div class="dynamic-circle-settings"><div class="layer-form-grid"><label><span>円1半径</span><input id="markCircleRadius1" type="number" min="0" step="0.1" /></label><label><span>円1色</span><select id="markCircleColor1"><option value="red">赤</option><option value="yellow">黄</option><option value="blue">青</option><option value="green">緑</option></select></label></div><div class="layer-form-grid"><label><span>円2半径</span><input id="markCircleRadius2" type="number" min="0" step="0.1" /></label><label><span>円2色</span><select id="markCircleColor2"><option value="red">赤</option><option value="yellow">黄</option><option value="blue">青</option><option value="green">緑</option></select></label></div><div class="layer-form-grid"><label><span>円3半径</span><input id="markCircleRadius3" type="number" min="0" step="0.1" /></label><label><span>円3色</span><select id="markCircleColor3"><option value="red">赤</option><option value="yellow">黄</option><option value="blue">青</option><option value="green">緑</option></select></label></div></div>
+          <button id="saveMarkSettings" type="button" class="primary-btn small-btn">保存</button>
+        </div>
+
+        <div id="settingsStatus" class="settings-status">設定を確認してください</div>
+      </div>
+    </div>
+
+    <script src="app.js?v=122-20260910-1"></script>
+  </body>
+</html>
